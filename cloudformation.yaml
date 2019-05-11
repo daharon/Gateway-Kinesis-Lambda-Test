@@ -1,5 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
+# https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md
 Transform: 'AWS::Serverless-2016-10-31'
 Description: 'API Gateway -> Kinesis -> Lambda -> DB'
 
