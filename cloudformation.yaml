@@ -68,8 +68,8 @@ Resources:
 
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
-#    DependsOn:
-#      - ItemPutMethod
+    DependsOn:
+      - ItemPutMethod
     Properties:
       RestApiId: !Ref RestApi
       StageName: 'Pre-Prod'
