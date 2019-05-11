@@ -1,0 +1,181 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'API Gateway -> Kinesis -> Lambda -> DB'
+
+Resources:
+
+  ###
+  # API Gateway
+  ###
+  ApiAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      # TODO:  Change to only access CloudWatch logs.
+      CloudWatchRoleArn: !GetAtt ApiRole.Arn
+
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/test/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: Kinesis
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:PutRecord
+                Resource:
+                  - !GetAtt KinesisStream.Arn
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: 'Api-Kinesis-Test'
+      Description: 'Rest API for test.'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: Latest
+      DeploymentId: !Ref ApiDeployment
+      RestApiId: !Ref RestApi
+      MethodSettings:
+        - DataTraceEnabled: True
+          HttpMethod: '*'
+          MetricsEnabled: True
+          ResourcePath: '/*'
+          ThrottlingRateLimit: 10.0
+          ThrottlingBurstLimit: 20
+          LoggingLevel: INFO
+      #Tags:
+      #  - Key: String
+      #    Value: String
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+#    DependsOn:
+#      - ItemPutMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      StageName: 'Pre-Prod'
+
+  ###
+  # API Validation
+  ###
+  BodyOnlyValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      RestApiId: !Ref RestApi
+      ValidateRequestBody: True
+      ValidateRequestParameters: False
+
+  ###
+  # API Models
+  ###
+  ItemModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: 'application/json'
+      Description: 'Item for pass-through to Kinesis.'
+      RestApiId: !Ref RestApi
+      Schema:
+        $schema: "http://json-schema.org/draft-07/schema#"
+        title: Item
+        description: 'Item for pass-through to Kinesis'
+        type: object
+        properties:
+          id:
+            description: 'The item ID.'
+            type: integer
+          description:
+            description: 'A description of the item.'
+            type: string
+          count:
+            description: 'How many items exist.'
+            type: integer
+
+  ###
+  # API Resources
+  ###
+
+  ### /item
+  ItemResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      PathPart: item
+      ParentId: !GetAtt RestApi.RootResourceId
+      RestApiId: !Ref RestApi
+
+  ItemPutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref ItemResource
+      RestApiId: !Ref RestApi
+      AuthorizationType: NONE
+      HttpMethod: PUT
+      RequestValidatorId: !Ref BodyOnlyValidator
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt ApiRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: NEVER
+        RequestParameters:
+          'integration.request.header.Content-Type': "'application/x-amz-json-1.1'"
+        RequestTemplates:
+          'application/json': !Sub |
+            #set($partitionKey = $context.requestId)
+            {
+                "StreamName": "${KinesisStream}",
+                "Data": "$util.base64Encode($input.body)",
+                "PartitionKey": "$partitionKey"
+            }
+        Uri: !Join
+          - ':'
+          - - 'arn:aws:apigateway'
+            - !Ref 'AWS::Region'
+            - 'kinesis'
+            - 'action/PutRecord'
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: '2\d{2}'
+          - StatusCode: 400
+            SelectionPattern: '4\d{2}'
+          - StatusCode: 500
+            SelectionPattern: '5\d{2}'
+      OperationName: InsertItem
+      RequestModels:
+        'application/json': !Ref ItemModel
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            'application/json': Empty
+        - StatusCode: 400
+          ResponseModels:
+            'application/json': Error
+        - StatusCode: 500
+          ResponseModels:
+            'application/json': Error
+
+  ###
+  # Kinesis
+  ###
+  KinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 1

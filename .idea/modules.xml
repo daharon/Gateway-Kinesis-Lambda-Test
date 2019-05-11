@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/Gateway-Kinesis-Lambda-Test.iml" filepath="$PROJECT_DIR$/Gateway-Kinesis-Lambda-Test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/jvm/lambda-jvm.iml" filepath="$PROJECT_DIR$/jvm/lambda-jvm.iml" />
+      <module fileurl="file://$PROJECT_DIR$/rust/lambda-rust.iml" filepath="$PROJECT_DIR$/rust/lambda-rust.iml" />
+    </modules>
+  </component>
+</project>
