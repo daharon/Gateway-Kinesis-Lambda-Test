@@ -4,6 +4,7 @@
       <w>cloudformation</w>
       <w>kinesis</w>
       <w>rustup</w>
+      <w>serverless</w>
     </words>
   </dictionary>
 </component>

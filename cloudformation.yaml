@@ -1,5 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
+Transform: 'AWS::Serverless-2016-10-31'
 Description: 'API Gateway -> Kinesis -> Lambda -> DB'
 
 Resources:
@@ -179,3 +180,76 @@ Resources:
     Properties:
       RetentionPeriodHours: 24
       ShardCount: 1
+
+  ###
+  # Lambda Functions
+  ###
+  RustFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 'Rust function for the API Gateway -> Kinesis -> Lambda test.'
+      CodeUri: ./rust/target/lambda/release/gateway-kinesis-lambda-test.zip
+      Runtime: provided
+      Handler: NA
+      MemorySize: 128
+      Timeout: 30
+      Role: !GetAtt RustFunctionRole.Arn
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-48a2a02e
+        SubnetIds:
+          - subnet-00617c238bd96da41
+          - subnet-022a1424b02344981
+
+  RustFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/test/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaENIManagementAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: Kinesis
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStreamSummary
+                  - kinesis:GetRecords
+                  - kinesis:GetShardIterator
+                  - kinesis:ListShards
+                Resource:
+                  - !GetAtt KinesisStream.Arn
+              - Effect: Allow
+                Action:
+                  - kinesis:SubscribeToShard
+                Resource:
+                  - !GetAtt RustFunctionStreamConsumer.ConsumerARN
+
+  RustFunctionStreamConsumer:
+    Type: AWS::Kinesis::StreamConsumer
+    Properties:
+      ConsumerName: RustFunctionStreamConsumer
+      StreamARN: !GetAtt KinesisStream.Arn
+
+  RustFunctionEvents:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: true
+      EventSourceArn: !GetAtt RustFunctionStreamConsumer.ConsumerARN
+      FunctionName: !GetAtt RustFunction.Arn
+      StartingPosition: LATEST
+      BatchSize: 100

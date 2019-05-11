@@ -22,8 +22,14 @@ directory.
 ## Deploy
 
 ```
+$ aws cloudformation package \
+    --template-file ./cloudformation.yaml \
+    --output-template-file ./cloudformation.pkg.yaml \
+    --force-upload \
+    --s3-bucket us-aharon-test 
+    
 $ aws cloudformation deploy \
-    --template-file cloudformation.yaml \
+    --template-file ./cloudformation.pkg.yaml \
     --capabilities CAPABILITY_IAM \
     --stack-name 'api-kinesis-test-6' 
 ```
