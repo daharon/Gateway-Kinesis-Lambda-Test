@@ -9,9 +9,9 @@ use serde::Deserialize;
 /// Structure defined in `cloudformation.yaml` under the [ItemModel] resource.
 #[derive(Deserialize, Debug)]
 pub struct Item {
-    pub id: i64,
+    pub id: i32,
     pub description: String,
-    pub count: i64,
+    pub count: i32,
 }
 
 impl TryFrom<&KinesisEventRecord> for Item {

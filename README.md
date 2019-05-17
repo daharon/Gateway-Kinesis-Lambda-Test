@@ -31,5 +31,7 @@ $ aws cloudformation package \
 $ aws cloudformation deploy \
     --template-file ./cloudformation.pkg.yaml \
     --capabilities CAPABILITY_IAM \
+    --force-upload \
+    --parameter-overrides MyIP=$(curl --silent ipecho.net/plain) \
     --stack-name 'api-kinesis-test-6' 
 ```

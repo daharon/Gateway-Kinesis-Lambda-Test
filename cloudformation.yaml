@@ -4,8 +4,12 @@ AWSTemplateFormatVersion: 2010-09-09
 Transform: 'AWS::Serverless-2016-10-31'
 Description: 'API Gateway -> Kinesis -> Lambda -> DB'
 
-Resources:
+Parameters:
+  MyIP:
+    Type: String
+    Description: 'My IP address to allow access to the database. Use `curl ipecho.net/plain`.'
 
+Resources:
   ###
   # API Gateway
   ###
@@ -198,6 +202,11 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: DEBUG
+          CASSANDRA_HOST: !Join
+            - '.'
+            - - !GetAtt CassandraServiceDiscovery.Name
+              - gklt
+          CASSANDRA_PORT: '9042'
       VpcConfig:
         SecurityGroupIds:
           - sg-48a2a02e
@@ -254,3 +263,140 @@ Resources:
       FunctionName: !GetAtt RustFunction.Arn
       StartingPosition: LATEST
       BatchSize: 100
+
+  ###
+  # ECS Cluster
+  ###
+  GatewayKinesisLambdaTestCluster:
+    Type: AWS::ECS::Cluster
+
+  GatewayKinesisLambdaTestNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: gklt
+      Vpc: vpc-6aa3310e
+
+  ###
+  # ECS Services
+  ###
+  CassandraRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/test/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: Logs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource:
+                  - !GetAtt CassandraLogs.Arn
+
+  CassandraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Access to Cassandra service.'
+      SecurityGroupEgress:
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 0
+          ToPort: 65535
+          IpProtocol: -1
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: sg-48a2a02e
+          IpProtocol: tcp
+          FromPort: 9042
+          ToPort: 9042
+        - CidrIp: !Join [ '/', [ !Ref MyIP, '32' ] ]
+          IpProtocol: tcp
+          FromPort: 9042
+          ToPort: 9042
+      VpcId: vpc-6aa3310e
+
+  CassandraLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/ecs/cassandra'
+      RetentionInDays: 14
+
+  CassandraTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: gklt-cassandra
+      Cpu: 2048
+      Memory: 4096
+      ExecutionRoleArn: !GetAtt CassandraRole.Arn
+      TaskRoleArn: !GetAtt CassandraRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Image: 'cassandra:3'
+          Name: cassandra
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CassandraLogs
+              awslogs-region: us-east-1
+              awslogs-stream-prefix: ecs
+          PortMappings:
+            - ContainerPort: 9042
+              HostPort: 9042
+              Protocol: tcp
+          Ulimits:
+            - Name: nofile
+              HardLimit: 16384
+              SoftLimit: 16384
+
+
+  CassandraServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: cassandra
+      NamespaceId: !Ref GatewayKinesisLambdaTestNamespace
+      DnsConfig:
+        DnsRecords:
+          - TTL: 60
+            Type: A
+        RoutingPolicy: MULTIVALUE
+      # Required for proper inter-operation with ECS services.
+      HealthCheckCustomConfig:
+        FailureThreshold: 2
+
+  CassandraService:
+    Type: AWS::ECS::Service
+    Properties:
+      TaskDefinition: !Ref CassandraTaskDefinition
+      DesiredCount: 1
+      Cluster: !GetAtt GatewayKinesisLambdaTestCluster.Arn
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref CassandraSecurityGroup
+          Subnets:
+            - subnet-314a8547
+            - subnet-70f31228
+      ServiceRegistries:
+        - RegistryArn: !GetAtt CassandraServiceDiscovery.Arn
