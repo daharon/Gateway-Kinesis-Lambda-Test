@@ -260,29 +260,21 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - kinesis:DescribeStream
                   - kinesis:DescribeStreamSummary
                   - kinesis:GetRecords
                   - kinesis:GetShardIterator
                   - kinesis:ListShards
-                Resource:
-                  - !GetAtt KinesisStream.Arn
-              - Effect: Allow
-                Action:
+                  - kinesis:ListStreams
                   - kinesis:SubscribeToShard
                 Resource:
-                  - !GetAtt RustFunctionStreamConsumer.ConsumerARN
-
-  RustFunctionStreamConsumer:
-    Type: AWS::Kinesis::StreamConsumer
-    Properties:
-      ConsumerName: RustFunctionStreamConsumer
-      StreamARN: !GetAtt KinesisStream.Arn
+                  - !GetAtt KinesisStream.Arn
 
   RustFunctionEvents:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
       Enabled: true
-      EventSourceArn: !GetAtt RustFunctionStreamConsumer.ConsumerARN
+      EventSourceArn: !GetAtt KinesisStream.Arn
       FunctionName: !GetAtt RustFunction.Arn
       StartingPosition: LATEST
       BatchSize: 100
