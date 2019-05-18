@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
-use log::{debug, info};
+use std::error::Error;
+use log::{debug, error};
 
 use aws_lambda_events::event::kinesis::KinesisEvent;
 use cdrs::query::*;
@@ -18,12 +19,21 @@ use crate::models::item::Item;
 /// `lambda_runtime::lambda!` macro.
 pub struct GatewayKinesisLambdaTestHandler {
     cdb: CassandraSession,
+    prepared_insert: PreparedQuery,
 }
 
 impl GatewayKinesisLambdaTestHandler {
     pub fn new(config: Config) -> Self {
+        let cdb: CassandraSession = cassandra::session::new(&config.cassandra_host, config.cassandra_port);
+        let insert_query = format!(r#"
+            INSERT INTO {}.{}
+            (id, description, count)
+            VALUES (?, ?, ?)"#,
+            CASSANDRA_KEYSPACE, CASSANDRA_TABLE);
+        let prepared_insert = cdb.prepare(insert_query).unwrap();
         Self {
-            cdb: cassandra::session::new(&config.cassandra_host, config.cassandra_port),
+            cdb,
+            prepared_insert
         }
     }
 }
@@ -33,21 +43,21 @@ impl lambda_runtime::Handler<KinesisEvent, (), HandlerError> for GatewayKinesisL
     /// This function is run on triggering events.
     fn run(&mut self, event: KinesisEvent, _ctx: Context) -> Result<(), HandlerError> {
         debug!("Received event:  {:?}", event);
+        debug!("Number of received records:  {}", event.records.len());
 
         for record in event.records {
             let item = match Item::try_from(&record) {
                 Ok(i) => i,
                 Err(e) => return Err(HandlerError::from(e.description())),
             };
-            info!("Received the following Item object:  {:?}", item);
-            let query = format!(r#"
-                INSERT INTO {}.{}
-                (id, description, count)
-                VALUES (?, ?, ?)"#,
-                CASSANDRA_KEYSPACE, CASSANDRA_TABLE);
+            debug!("Received the following Item object:  {:?}", item);
             let values = query_values!(item.id, item.description, item.count);
-            self.cdb.query_with_values(&query, values)
-                .expect(&format!("Failed to insert item with id {}", item.id));
+            let result = self.cdb.exec_with_values(&self.prepared_insert, values);
+            // TODO:  Perform bulk insert.
+            if let Err(e) = result {
+                error!("Failed to insert item with id {}", item.id);
+                return Err(HandlerError::from(e.description()));
+            }
         }
         Ok(())
     }

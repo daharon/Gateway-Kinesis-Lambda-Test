@@ -10,7 +10,7 @@ pub static CASSANDRA_TABLE: &str    = "test_table";
 pub type CassandraSession = Session<RoundRobin<TcpConnectionPool<NoneAuthenticator>>>;
 
 
-pub fn new<'a>(host: &str, port: i32) -> CassandraSession {
+pub fn new(host: &str, port: i32) -> CassandraSession {
     let addr = format!("{}:{}", host, port);
     let node = NodeTcpConfigBuilder::new(&addr, NoneAuthenticator {})
         .build();

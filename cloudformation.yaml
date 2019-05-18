@@ -65,12 +65,9 @@ Resources:
           HttpMethod: '*'
           MetricsEnabled: True
           ResourcePath: '/*'
-          ThrottlingRateLimit: 10.0
-          ThrottlingBurstLimit: 20
+          ThrottlingRateLimit: 100
+          ThrottlingBurstLimit: 100
           LoggingLevel: INFO
-      #Tags:
-      #  - Key: String
-      #    Value: String
 
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -78,7 +75,33 @@ Resources:
       - ItemPutMethod
     Properties:
       RestApiId: !Ref RestApi
-      StageName: 'Pre-Prod'
+
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: !Ref ApiStage
+      Throttle:
+        RateLimit: 100.0
+        BurstLimit: 100
+
+  ApiBenchmarkKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: benchmark
+      Description: 'Benchmark client.'
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref RestApi
+          StageName: !Ref ApiStage
+
+  ApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiBenchmarkKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiUsagePlan
 
   ###
   # API Validation
