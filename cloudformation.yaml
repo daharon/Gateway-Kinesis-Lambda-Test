@@ -225,10 +225,7 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: DEBUG
-          CASSANDRA_HOST: !Join
-            - '.'
-            - - !GetAtt CassandraServiceDiscovery.Name
-              - gklt
+          CASSANDRA_HOST: !Join [ '.', [ !GetAtt CassandraServiceDiscovery.Name, 'gklt' ] ]
           CASSANDRA_PORT: '9042'
       VpcConfig:
         SecurityGroupIds:
@@ -276,6 +273,70 @@ Resources:
       Enabled: true
       EventSourceArn: !GetAtt KinesisStream.Arn
       FunctionName: !GetAtt RustFunction.Arn
+      StartingPosition: LATEST
+      BatchSize: 100
+
+  JvmFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 'JVM function for the API Gateway -> Kinesis -> Lambda test.'
+      CodeUri: ./jvm/target/gateway-kinesis-lambda-test-fat.jar
+      Runtime: java8
+      Handler: 'us.aharon.gateway.kinesis.lambda.test.App::handler'
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt JvmFunctionRole.Arn
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+          CASSANDRA_HOST: !Join [ '.', [ !GetAtt CassandraServiceDiscovery.Name, 'gklt' ] ]
+          CASSANDRA_PORT: '9042'
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-48a2a02e
+        SubnetIds:
+          - subnet-00617c238bd96da41
+          - subnet-022a1424b02344981
+
+  JvmFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/test/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaENIManagementAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: Kinesis
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:DescribeStreamSummary
+                  - kinesis:GetRecords
+                  - kinesis:GetShardIterator
+                  - kinesis:ListShards
+                  - kinesis:ListStreams
+                  - kinesis:SubscribeToShard
+                Resource:
+                  - !GetAtt KinesisStream.Arn
+
+  JvmFunctionEvents:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: true
+      EventSourceArn: !GetAtt KinesisStream.Arn
+      FunctionName: !GetAtt JvmFunction.Arn
       StartingPosition: LATEST
       BatchSize: 100
 

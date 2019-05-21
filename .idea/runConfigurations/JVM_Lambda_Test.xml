@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="JVM Lambda Test" type="JUnit" factoryName="JUnit">
+    <module name="lambda-jvm" />
+    <option name="PACKAGE_NAME" value="us.aharon.gateway.kinesis.lambda.test" />
+    <option name="MAIN_CLASS_NAME" value="" />
+    <option name="METHOD_NAME" value="" />
+    <option name="TEST_OBJECT" value="package" />
+    <option name="PARAMETERS" value="" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

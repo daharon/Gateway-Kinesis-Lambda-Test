@@ -50,7 +50,7 @@ impl lambda_runtime::Handler<KinesisEvent, (), HandlerError> for GatewayKinesisL
                 Ok(i) => i,
                 Err(e) => return Err(HandlerError::from(e.description())),
             };
-            debug!("Received the following Item object:  {:?}", item);
+            debug!("De-serialized the following Item object:  {:?}", item);
             let values = query_values!(item.id, item.description, item.count);
             let result = self.cdb.exec_with_values(&self.prepared_insert, values);
             // TODO:  Perform bulk insert.
