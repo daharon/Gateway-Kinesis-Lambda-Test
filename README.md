@@ -4,11 +4,18 @@
 
 ### JVM
 
+```
+$ cd jvm
+$ mvn install
+```
+The resulting JAR file will be located in the `target` directory.
+
 ### Rust
 
 Use the [AWS Lambda Rust Docker Builder](https://github.com/softprops/lambda-rust) 
 to cross-compile for the AWS Lambda environment.
 ```
+$ cd rust
 $ docker run \
     --rm \
     --volume ${PWD}:/code \
@@ -35,3 +42,25 @@ $ aws cloudformation deploy \
     --parameter-overrides MyIP=$(curl --silent ipecho.net/plain) \
     --stack-name 'api-kinesis-test-6' 
 ```
+
+## Pricing
+
+<table>
+    <tr>
+        <td rowspan="2">API Gateway</td>
+        <td>$3.50/M requests</td>
+    </tr>
+    <tr>
+        <td>$0.09/GB</td>
+    </tr>
+    <tr>
+        <td rowspan="3">Kinesis</td>
+        <td>$0.015/shard/hour</td>
+    </tr>   
+    <tr>
+        <td>$0.014/M writes</td>
+    </tr>
+    <tr>
+        <td>$0.013/GB read</td>
+    </tr>
+</table>
