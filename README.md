@@ -39,7 +39,10 @@ $ aws cloudformation deploy \
     --template-file ./cloudformation.pkg.yaml \
     --capabilities CAPABILITY_IAM \
     --force-upload \
-    --parameter-overrides MyIP=$(curl --silent ipecho.net/plain) \
+    --parameter-overrides \
+        "MyIP=$(curl --silent ipecho.net/plain)" \
+        'VPC=vpc-foo123' \
+        'Subnets=subnet-bar456,subnet-baz789' \
     --stack-name 'api-kinesis-test-6' 
 ```
 

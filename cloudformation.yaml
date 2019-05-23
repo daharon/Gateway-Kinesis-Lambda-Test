@@ -8,6 +8,12 @@ Parameters:
   MyIP:
     Type: String
     Description: 'My IP address to allow access to the database. Use `curl ipecho.net/plain`.'
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: 'The VPC ID within which to run the Lambda functions and ECS database task.'
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'List of subnets within the specified VPC.'
 
 Resources:
   ###
@@ -16,7 +22,6 @@ Resources:
   ApiAccount:
     Type: AWS::ApiGateway::Account
     Properties:
-      # TODO:  Change to only access CloudWatch logs.
       CloudWatchRoleArn: !GetAtt ApiRole.Arn
 
   ApiRole:
@@ -212,6 +217,17 @@ Resources:
   ###
   # Lambda Functions
   ###
+  SharedLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Lambda function SG for the Gateway-Kinesis-Lambda-Test.'
+      SecurityGroupEgress:
+        - CidrIp: '0.0.0.0/0'
+          FromPort: 0
+          ToPort: 65535
+          IpProtocol: -1
+      VpcId: !Ref VPC
+
   RustFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -229,10 +245,8 @@ Resources:
           CASSANDRA_PORT: '9042'
       VpcConfig:
         SecurityGroupIds:
-          - sg-48a2a02e
-        SubnetIds:
-          - subnet-00617c238bd96da41
-          - subnet-022a1424b02344981
+          - !Ref SharedLambdaSecurityGroup
+        SubnetIds: !Ref Subnets
 
   RustFunctionRole:
     Type: AWS::IAM::Role
@@ -293,10 +307,8 @@ Resources:
           CASSANDRA_PORT: '9042'
       VpcConfig:
         SecurityGroupIds:
-          - sg-48a2a02e
-        SubnetIds:
-          - subnet-00617c238bd96da41
-          - subnet-022a1424b02344981
+          - !Ref SharedLambdaSecurityGroup
+        SubnetIds: !Ref Subnets
 
   JvmFunctionRole:
     Type: AWS::IAM::Role
@@ -350,7 +362,7 @@ Resources:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
       Name: gklt
-      Vpc: vpc-6aa3310e
+      Vpc: !Ref VPC
 
   ###
   # ECS Services
@@ -396,7 +408,7 @@ Resources:
           ToPort: 65535
           IpProtocol: -1
       SecurityGroupIngress:
-        - SourceSecurityGroupId: sg-48a2a02e
+        - SourceSecurityGroupId: !Ref SharedLambdaSecurityGroup
           IpProtocol: tcp
           FromPort: 9042
           ToPort: 9042
@@ -404,7 +416,7 @@ Resources:
           IpProtocol: tcp
           FromPort: 9042
           ToPort: 9042
-      VpcId: vpc-6aa3310e
+      VpcId: !Ref VPC
 
   CassandraLogs:
     Type: AWS::Logs::LogGroup
@@ -441,7 +453,6 @@ Resources:
               HardLimit: 16384
               SoftLimit: 16384
 
-
   CassandraServiceDiscovery:
     Type: AWS::ServiceDiscovery::Service
     Properties:
@@ -471,8 +482,6 @@ Resources:
           AssignPublicIp: ENABLED
           SecurityGroups:
             - !Ref CassandraSecurityGroup
-          Subnets:
-            - subnet-314a8547
-            - subnet-70f31228
+          Subnets: !Ref Subnets
       ServiceRegistries:
         - RegistryArn: !GetAtt CassandraServiceDiscovery.Arn
